@@ -66,25 +66,32 @@ function makeTiles(file){
   const img=new Image(),url=URL.createObjectURL(file);
   img.onload=()=>{
    const w=img.naturalWidth,h=img.naturalHeight;
-   // Championsの選出画面：相手6匹は右側に縦1列。名前欄ではなく各カード領域を順番に切り出す。
-   const x0=Math.floor(w*.69),x1=Math.floor(w*.84),y0=Math.floor(h*.145),y1=Math.floor(h*.84);
-   const cw=x1-x0,ch=(y1-y0)/6,tiles=[];
-   for(let row=0;row<6;row++){
-    const padX=cw*.04,padY=ch*.06,canvas=document.createElement('canvas');
-    canvas.width=48;canvas.height=48;
+   // Championsの選出画面：相手6枠は右端寄りに縦1列。
+   // 添付された597x335画面でカード領域は概ね x=68.5〜85.5%, y=14.5〜84%。
+   const panelX0=w*.685,panelX1=w*.855,panelY0=h*.145,panelY1=h*.84;
+   const rowH=(panelY1-panelY0)/6,tiles=[];
+   for(let i=0;i<6;i++){
+    const top=panelY0+i*rowH,bottom=panelY0+(i+1)*rowH;
+    // ポケモン本体の表示領域だけを抽出し、右側のタイプ/性別アイコンを除外。
+    const sx=panelX0+(panelX1-panelX0)*.08;
+    const ex=panelX0+(panelX1-panelX0)*.62;
+    const sy=top+rowH*.08,ey=bottom-rowH*.08;
+    const canvas=document.createElement('canvas');canvas.width=48;canvas.height=48;
     const ctx=canvas.getContext('2d',{willReadFrequently:true});
-    ctx.drawImage(img,x0+padX,y0+row*ch+padY,cw-2*padX,ch-2*padY,0,0,48,48);
+    ctx.drawImage(img,sx,sy,ex-sx,ey-sy,0,0,48,48);
     const small=document.createElement('canvas');small.width=12;small.height=12;
     const sctx=small.getContext('2d',{willReadFrequently:true});sctx.drawImage(canvas,0,0,12,12);
     const px=sctx.getImageData(0,0,12,12).data,gray=[];
-    for(let i=0;i<px.length;i+=4)gray.push(Math.round((px[i]*.299+px[i+1]*.587+px[i+2]*.114)/255*16)/16);
-    const hist=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
-    for(let i=0;i<px.length;i+=4){hist[Math.min(7,Math.floor(px[i]/32))]++;hist[8+Math.min(7,Math.floor(px[i+1]/32))]++;hist[16+Math.min(7,Math.floor(px[i+2]/32))]++}
-    for(let i=0;i<hist.length;i++)hist[i]/=144;
+    for(let j=0;j<px.length;j+=4)gray.push(Math.round((px[j]*.299+px[j+1]*.587+px[j+2]*.114)/255*16)/16);
+    const hist=Array(24).fill(0);
+    for(let j=0;j<px.length;j+=4){hist[Math.min(7,Math.floor(px[j]/32))]++;hist[8+Math.min(7,Math.floor(px[j+1]/32))]++;hist[16+Math.min(7,Math.floor(px[j+2]/32))]++}
+    for(let j=0;j<hist.length;j++)hist[j]/=144;
     tiles.push({data:gray,hist});
    }
    URL.revokeObjectURL(url);resolve(tiles);
-  };img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('画像を読み込めません'))};img.src=url;
+  };
+  img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('画像を読み込めません'))};
+  img.src=url;
  });
 }
 function tileDistance(a,b){
