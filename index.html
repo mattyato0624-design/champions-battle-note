@@ -61,7 +61,7 @@ $('file').onchange=e=>{imageFile=e.target.files[0]||null;if(imageFile){$('previe
 const LOCAL_DB_KEY='championsLocalImageRefsV1';
 function getLocalRefs(){try{return JSON.parse(localStorage.getItem(LOCAL_DB_KEY)||'[]')}catch{return []}}
 function saveLocalRefs(v){localStorage.setItem(LOCAL_DB_KEY,JSON.stringify(v))}
-function makeTiles(file){
+function makeTiles(file,onProgress=()=>{}){
  return new Promise((resolve,reject)=>{
   const img=new Image(),url=URL.createObjectURL(file);
   img.onload=()=>{
@@ -87,6 +87,7 @@ function makeTiles(file){
     for(let j=0;j<px.length;j+=4){hist[Math.min(7,Math.floor(px[j]/32))]++;hist[8+Math.min(7,Math.floor(px[j+1]/32))]++;hist[16+Math.min(7,Math.floor(px[j+2]/32))]++}
     for(let j=0;j<hist.length;j++)hist[j]/=144;
     tiles.push({data:gray,hist});
+    onProgress(i+1,6);
    }
    URL.revokeObjectURL(url);resolve(tiles);
   };
@@ -104,12 +105,21 @@ $('learnImage').onclick=async()=>{
  const names=Array.from({length:6},(_,i)=>$('opp'+i).value.trim());
  if(names.some(x=>!x))return $('ocrStatus').textContent='相手6匹の名前を入力してから学習してください';
  const btn=$('learnImage');btn.disabled=true;
+ $('ocrStatus').textContent='学習を開始しました。画像を読み込んでいます…';
+ $('ocrText').value='';
  try{
-  const tiles=await makeTiles(imageFile),refs=getLocalRefs();
+  const tiles=await makeTiles(imageFile,(done,total)=>{
+   $('ocrStatus').textContent='学習中… 相手画像 '+done+'/'+total+' 枠を処理中';
+  });
+  $('ocrStatus').textContent='6枠の処理完了。端末内に保存しています…';
+  const refs=getLocalRefs();
   tiles.forEach((tile,i)=>refs.push({name:names[i],tile,addedAt:Date.now()}));
   saveLocalRefs(refs);
-  $('ocrStatus').textContent='6匹分をこのブラウザに学習しました。登録済み画像数：'+refs.length+'。別の画像・角度も学習すると候補が増えます。';
- }catch(e){$('ocrStatus').textContent='学習エラー：'+e.message}finally{btn.disabled=false}
+  $('ocrStatus').textContent='学習完了！今回の6匹をこのブラウザに保存しました。登録済み画像数：'+refs.length+'。次は「無料ローカル認識」を押して照合できます。';
+  $('ocrText').value='学習済み：'+names.join(' / ');
+ }catch(e){
+  $('ocrStatus').textContent='学習エラー：'+(e?.message||String(e))+'。保存できたか不明な場合は、もう一度学習してください。';
+ }finally{btn.disabled=false}
 };
 $('runOcr').onclick=async()=>{
  if(!imageFile)return $('ocrStatus').textContent='先に選出画面のスクショを選択してください';
