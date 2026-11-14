@@ -85,11 +85,18 @@ function b64(s){const z=atob(s),a=new Uint8Array(z.length);for(let i=0;i<z.lengt
 let refs;
 function getRefs(){if(!refs)refs=HASHES.map(h=>({species:h.species,g:normalize(b64(h.t)),c:normalize(b64(h.c))}));return refs}
 function flip(rgba,w,h){const out=new Uint8ClampedArray(rgba.length);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const s=(y*w+x)*4,d=(y*w+w-1-x)*4;out.set(rgba.subarray(s,s+4),d)}return out}
-function match(rgba,w,h){
+function match(rgba,w,h,learned=[]){
  const f=flip(rgba,w,h),[g,c]=thumbs(rgba,w,h),[fg,fc]=thumbs(f,w,h),gv=normalize(g),cv=normalize(c),fgv=normalize(fg),fcv=normalize(fc);
- let best={species:'',score:-1};for(const ref of getRefs()){const shape=Math.max(cosine(gv,ref.g),cosine(fgv,ref.g)),color=Math.max(cosine(cv,ref.c),cosine(fcv,ref.c)),score=.55*shape+.45*color;if(score>best.score)best={species:ref.species,score}}
- return best;
+ let best={species:'',score:-1,learned:false};
+ for(const ref of getRefs()){const shape=Math.max(cosine(gv,ref.g),cosine(fgv,ref.g)),color=Math.max(cosine(cv,ref.c),cosine(fcv,ref.c)),score=.55*shape+.45*color;if(score>best.score)best={species:ref.species,score,learned:false}}
+ for(const ref of learned){const rg=normalize(ref.g),rc=normalize(ref.c),shape=Math.max(cosine(gv,rg),cosine(fgv,rg)),color=Math.max(cosine(cv,rc),cosine(fcv,rc)),score=.55*shape+.45*color;if(score>best.score)best={species:ref.species,score,learned:true}}
+ return {...best,sample:{gray:Array.from(g),color:Array.from(c)}};
 }
+const LEARN_DB='champions-local-learning',LEARN_STORE='samples';
+function openLearnDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open(LEARN_DB,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(LEARN_STORE))req.result.createObjectStore(LEARN_STORE,{keyPath:'id',autoIncrement:true})};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
+export async function getLearnedSamples(){const db=await openLearnDb();return new Promise((resolve,reject)=>{const tx=db.transaction(LEARN_STORE,'readonly'),req=tx.objectStore(LEARN_STORE).getAll();req.onsuccess=()=>{db.close();resolve(req.result||[])};req.onerror=()=>{db.close();reject(req.error)}})}
+export async function saveLearnedSample(sample,species){if(!sample?.gray||!sample?.color||!species?.trim())throw Error('学習画像またはポケモン名がありません');const db=await openLearnDb();return new Promise((resolve,reject)=>{const tx=db.transaction(LEARN_STORE,'readwrite');tx.objectStore(LEARN_STORE).add({species:species.trim(),g:sample.gray,c:sample.color,createdAt:Date.now()});tx.oncomplete=()=>{db.close();resolve(true)};tx.onerror=()=>{db.close();reject(tx.error)}})}
+
 // Some Champions screenshots arrange the six enemy cards as a 3-column × 2-row grid.
 // Detect that layout first; otherwise use the upstream single red-column layout.
 function detectGridCells(img){
@@ -105,11 +112,11 @@ function detectGridCells(img){
  return ys.flatMap(y=>xs.map(x=>({x0:x[0],x1:x[1],y0:y[0],y1:y[1]})));
 }
 export async function recognizeOpponentImage(file){
- const img=await decodeImage(file),grid=detectGridCells(img),results=[];
+ const img=await decodeImage(file),grid=detectGridCells(img),results=[],learned=await getLearnedSamples();
  if(grid&&grid.length===6){
   for(const cell of grid){const cw=cell.x1-cell.x0+1,ch=cell.y1-cell.y0+1,sw=Math.round(cw*.7),sy=cell.y0+Math.round(ch*.08),sh=Math.max(8,Math.round(ch*.84));
-   const rgba=removeBg(crop(img,cell.x0,sy,sw,sh),sw,sh),m=match(rgba,sw,sh),conf=clamp(m.score,0,1);
-   results.push({name:conf>=MATCH_THRESHOLD?m.species:'',candidate:conf>=MENTION_THRESHOLD?m.species:'',confidence:conf,uncertain:conf<MATCH_THRESHOLD});
+   const rgba=removeBg(crop(img,cell.x0,sy,sw,sh),sw,sh),m=match(rgba,sw,sh,learned),conf=clamp(m.score,0,1);
+   results.push({name:conf>=MATCH_THRESHOLD?m.species:'',candidate:conf>=MENTION_THRESHOLD?m.species:'',confidence:conf,uncertain:conf<MATCH_THRESHOLD,learnedMatch:!!m.learned,sample:m.sample});
   }
  }else{
   const [x0,x1]=detectColumn(img);
@@ -118,7 +125,7 @@ export async function recognizeOpponentImage(file){
   if(valid.length!==6)throw Error('相手6枠を6つに分割できませんでした。画像の解像度や画面レイアウトを確認してください');
   const spriteW=Math.round((x1-x0)*.7);
   for(const [top,bottom] of valid){const h=bottom-top;if(spriteW<8||h<8){results.push({name:'',confidence:0,uncertain:true});continue}
-   const rgba=removeBg(crop(img,x0,top,spriteW,h),spriteW,h),m=match(rgba,spriteW,h),conf=clamp(m.score,0,1);
+   const rgba=removeBg(crop(img,x0,top,spriteW,h),spriteW,h),m=match(rgba,spriteW,h,learned),conf=clamp(m.score,0,1);
    results.push({name:conf>=MATCH_THRESHOLD?m.species:'',candidate:conf>=MENTION_THRESHOLD?m.species:'',confidence:conf,uncertain:conf<MATCH_THRESHOLD});
   }
  }
