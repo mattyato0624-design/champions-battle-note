@@ -9,6 +9,9 @@ import HASHES from './sprite-hashes.json' with { type: 'json' };
 
 const THUMB=16, CTHUMB=8, COLOR_WEIGHT=.45, MATCH_THRESHOLD=.70, MENTION_THRESHOLD=.45;
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+// Recognition and user learning labels are stored/displayed in Japanese.
+const JA_NAMES={'Tauros-Paldea-Aqua':'ケンタロス（パルデアのすがた・みず）','Clawitzer':'ブロスター','Alcremie':'マホイップ'};
+const japaneseName=name=>JA_NAMES[name]||name;
 function decodeImage(blob){
  return new Promise((resolve,reject)=>{
   const url=URL.createObjectURL(blob),img=new Image();
@@ -116,7 +119,7 @@ export async function recognizeOpponentImage(file){
  if(grid&&grid.length===6){
   for(const cell of grid){const cw=cell.x1-cell.x0+1,ch=cell.y1-cell.y0+1,sw=Math.round(cw*.7),sy=cell.y0+Math.round(ch*.08),sh=Math.max(8,Math.round(ch*.84));
    const rgba=removeBg(crop(img,cell.x0,sy,sw,sh),sw,sh),m=match(rgba,sw,sh,learned),conf=clamp(m.score,0,1);
-   results.push({name:conf>=MATCH_THRESHOLD?m.species:'',candidate:conf>=MENTION_THRESHOLD?m.species:'',confidence:conf,uncertain:conf<MATCH_THRESHOLD,learnedMatch:!!m.learned,sample:m.sample});
+   results.push({name:conf>=MATCH_THRESHOLD?japaneseName(m.species):'',candidate:conf>=MENTION_THRESHOLD?japaneseName(m.species):'',confidence:conf,uncertain:conf<MATCH_THRESHOLD,learnedMatch:!!m.learned,sample:m.sample});
   }
  }else{
   const [x0,x1]=detectColumn(img);
