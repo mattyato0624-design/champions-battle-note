@@ -12,6 +12,6 @@ The local recognizer and its integration are adapted from the upstream AGPL-3.0 
 
 The recognizer runs in the browser. The selected image is processed locally for recognition and is not sent to an AI/vision API or recognition server. A separate user-initiated match-save action may upload the image to the user's private Supabase storage for record keeping.
 
-Recognition is experimental. It is designed for the standard Champions enemy (red) Team Preview column. Low-confidence matches are left blank and must be checked manually. It is not guaranteed to identify every Pokémon correctly.
+Recognition is experimental. It supports the enemy-side red panels in either a 3-column × 2-row grid or the standard six-slot vertical column. Low-confidence matches are left blank and must be checked manually. It is not guaranteed to identify every Pokémon correctly.
 
 This project is not affiliated with or endorsed by Pokémon, Nintendo, or The Pokémon Company.
