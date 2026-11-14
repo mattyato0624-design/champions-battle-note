@@ -71,7 +71,7 @@ function renderLearningPanel(results){
   const field=document.createElement('input');field.placeholder='正しいポケモン名（日本語）';field.value=p.name||p.candidate||'';wrap.append(field);
   const save=document.createElement('button');save.type='button';save.textContent=p.sample?'正解を保存して学習':'正解を入力';save.onclick=async()=>{
    const species=field.value.trim();if(!species)return alert('正しいポケモン名を入力してね');
-   try{if(p.sample){const mod=await import('./local-recognizer.js?v=20261114-ja3');await mod.saveLearnedSample(p.sample,species)}
+   try{if(p.sample){const mod=await import('./local-recognizer.js?v=20261114-ja4');await mod.saveLearnedSample(p.sample,species)}
     $('opp'+i).value=species;label.textContent='相手 '+(i+1)+'匹目 · '+species+' · 保存済み';save.textContent=p.sample?'学習済み ✓':'入力済み ✓';save.disabled=true;
    }catch(e){alert('学習保存エラー：'+e.message)}
   };wrap.append(save);panel.append(wrap);
@@ -81,7 +81,7 @@ $('runOcr').onclick=async()=>{
  if(!imageFile)return $('ocrStatus').textContent='先に選出画面のスクショを選択してください';
  const btn=$('runOcr');btn.disabled=true;$('ocrStatus').textContent='端末内で相手6匹を解析中…';$('ocrText').value='';
  try{
-  const {recognizeOpponentImage}=await import('./local-recognizer.js?v=20261114-ja3');
+  const {recognizeOpponentImage}=await import('./local-recognizer.js?v=20261114-ja4');
   const result=await recognizeOpponentImage(imageFile);
   recognitionSamples=result.pokemon;
   result.pokemon.forEach((p,i)=>{$('opp'+i).value=p.name||''});
