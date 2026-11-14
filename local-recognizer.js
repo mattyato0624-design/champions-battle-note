@@ -90,15 +90,37 @@ function match(rgba,w,h){
  let best={species:'',score:-1};for(const ref of getRefs()){const shape=Math.max(cosine(gv,ref.g),cosine(fgv,ref.g)),color=Math.max(cosine(cv,ref.c),cosine(fcv,ref.c)),score=.55*shape+.45*color;if(score>best.score)best={species:ref.species,score}}
  return best;
 }
+// Some Champions screenshots arrange the six enemy cards as a 3-column × 2-row grid.
+// Detect that layout first; otherwise use the upstream single red-column layout.
+function detectGridCells(img){
+ const {data,width:W,height:H}=img,xc=new Uint32Array(W),yc=new Uint32Array(H);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4;if(isRed(data[i],data[i+1],data[i+2])){xc[x]++;yc[y]++}}
+ const runs=(a,threshold,minLen)=>{const out=[];let st=-1;for(let i=0;i<a.length;i++){if(a[i]>=threshold){if(st<0)st=i}else if(st>=0){if(i-st>=minLen)out.push([st,i-1]);st=-1}}if(st>=0&&a.length-st>=minLen)out.push([st,a.length-1]);return out};
+ const xs=runs(xc,H*.12,Math.max(8,Math.floor(W*.025)));
+ if(xs.length!==3)return null;
+ const x0=xs[0][0],x1=xs[2][1],rows=new Uint32Array(H);
+ for(let y=0;y<H;y++)for(let x=x0;x<=x1;x++){const i=(y*W+x)*4;if(isRed(data[i],data[i+1],data[i+2]))rows[y]++}
+ const ys=runs(rows,(x1-x0+1)*.22,Math.max(8,Math.floor(H*.08)));
+ if(ys.length!==2)return null;
+ return ys.flatMap(y=>xs.map(x=>({x0:x[0],x1:x[1],y0:y[0],y1:y[1]})));
+}
 export async function recognizeOpponentImage(file){
- const img=await decodeImage(file),[x0,x1]=detectColumn(img);
- if(x1-x0<20)throw Error('相手側の赤いパネルを検出できません。Championsの選出画面スクショか確認してください');
- const slots=detectSlots(img,x0,x1),valid=slots.filter(([a,b])=>a>=0&&b<=img.height&&b-a>=8);
- if(valid.length!==6)throw Error('相手6枠を6つに分割できませんでした。画像の解像度や画面レイアウトを確認してください');
- const spriteW=Math.round((x1-x0)*.7),results=[];
- for(let i=0;i<6;i++){const [top,bottom]=valid[i],h=bottom-top;if(spriteW<8||h<8){results.push({name:'',confidence:0,uncertain:true});continue}
-  const rgba=removeBg(crop(img,x0,top,spriteW,h),spriteW,h),m=match(rgba,spriteW,h),conf=clamp(m.score,0,1);
-  results.push({name:conf>=MATCH_THRESHOLD?m.species:'',candidate:conf>=MENTION_THRESHOLD?m.species:'',confidence:conf,uncertain:conf<MATCH_THRESHOLD});
+ const img=await decodeImage(file),grid=detectGridCells(img),results=[];
+ if(grid&&grid.length===6){
+  for(const cell of grid){const cw=cell.x1-cell.x0+1,ch=cell.y1-cell.y0+1,sw=Math.round(cw*.7),sy=cell.y0+Math.round(ch*.08),sh=Math.max(8,Math.round(ch*.84));
+   const rgba=removeBg(crop(img,cell.x0,sy,sw,sh),sw,sh),m=match(rgba,sw,sh),conf=clamp(m.score,0,1);
+   results.push({name:conf>=MATCH_THRESHOLD?m.species:'',candidate:conf>=MENTION_THRESHOLD?m.species:'',confidence:conf,uncertain:conf<MATCH_THRESHOLD});
+  }
+ }else{
+  const [x0,x1]=detectColumn(img);
+  if(x1-x0<20)throw Error('相手側の赤いパネルを検出できません。Championsの選出画面スクショか確認してください');
+  const slots=detectSlots(img,x0,x1),valid=slots.filter(([a,b])=>a>=0&&b<=img.height&&b-a>=8);
+  if(valid.length!==6)throw Error('相手6枠を6つに分割できませんでした。画像の解像度や画面レイアウトを確認してください');
+  const spriteW=Math.round((x1-x0)*.7);
+  for(const [top,bottom] of valid){const h=bottom-top;if(spriteW<8||h<8){results.push({name:'',confidence:0,uncertain:true});continue}
+   const rgba=removeBg(crop(img,x0,top,spriteW,h),spriteW,h),m=match(rgba,spriteW,h),conf=clamp(m.score,0,1);
+   results.push({name:conf>=MATCH_THRESHOLD?m.species:'',candidate:conf>=MENTION_THRESHOLD?m.species:'',confidence:conf,uncertain:conf<MATCH_THRESHOLD});
+  }
  }
  return {pokemon:results,recognized:results.filter(x=>x.name).length,engine:'local'};
 }
