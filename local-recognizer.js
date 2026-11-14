@@ -126,7 +126,7 @@ export async function recognizeOpponentImage(file){
   const spriteW=Math.round((x1-x0)*.7);
   for(const [top,bottom] of valid){const h=bottom-top;if(spriteW<8||h<8){results.push({name:'',confidence:0,uncertain:true});continue}
    const rgba=removeBg(crop(img,x0,top,spriteW,h),spriteW,h),m=match(rgba,spriteW,h,learned),conf=clamp(m.score,0,1);
-   results.push({name:conf>=MATCH_THRESHOLD?m.species:'',candidate:conf>=MENTION_THRESHOLD?m.species:'',confidence:conf,uncertain:conf<MATCH_THRESHOLD});
+   results.push({name:conf>=MATCH_THRESHOLD?m.species:'',candidate:conf>=MENTION_THRESHOLD?m.species:'',confidence:conf,uncertain:conf<MATCH_THRESHOLD,learnedMatch:!!m.learned,sample:m.sample});
   }
  }
  return {pokemon:results,recognized:results.filter(x=>x.name).length,engine:'local'};
