@@ -131,5 +131,7 @@ export async function recognizeOpponentImage(file){
    results.push({name:conf>=MATCH_THRESHOLD?japaneseName(m.species):'',candidate:conf>=MENTION_THRESHOLD?japaneseName(m.species):'',confidence:conf,uncertain:conf<MATCH_THRESHOLD,learnedMatch:!!m.learned,sample:m.sample});
   }
  }
+ while(results.length<6)results.push({name:'',candidate:'',confidence:0,uncertain:true,sample:null});
+ results.length=6;
  return {pokemon:results,recognized:results.filter(x=>x.name).length,engine:'local'};
 }
