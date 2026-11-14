@@ -66,14 +66,14 @@ function makeTiles(file){
   const img=new Image(),url=URL.createObjectURL(file);
   img.onload=()=>{
    const w=img.naturalWidth,h=img.naturalHeight;
-   // 相手側は画面右側。3列×2行の相対領域を切り出す。
-   const x0=Math.floor(w*.55),x1=Math.floor(w*.98),y0=Math.floor(h*.16),y1=Math.floor(h*.84);
-   const cw=(x1-x0)/3,ch=(y1-y0)/2,tiles=[];
-   for(let row=0;row<2;row++)for(let col=0;col<3;col++){
-    const padX=cw*.08,padY=ch*.08,canvas=document.createElement('canvas');
+   // Championsの選出画面：相手6匹は右側に縦1列。名前欄ではなく各カード領域を順番に切り出す。
+   const x0=Math.floor(w*.69),x1=Math.floor(w*.84),y0=Math.floor(h*.145),y1=Math.floor(h*.84);
+   const cw=x1-x0,ch=(y1-y0)/6,tiles=[];
+   for(let row=0;row<6;row++){
+    const padX=cw*.04,padY=ch*.06,canvas=document.createElement('canvas');
     canvas.width=48;canvas.height=48;
     const ctx=canvas.getContext('2d',{willReadFrequently:true});
-    ctx.drawImage(img,x0+col*cw+padX,y0+row*ch+padY,cw-2*padX,ch-2*padY,0,0,48,48);
+    ctx.drawImage(img,x0+padX,y0+row*ch+padY,cw-2*padX,ch-2*padY,0,0,48,48);
     const small=document.createElement('canvas');small.width=12;small.height=12;
     const sctx=small.getContext('2d',{willReadFrequently:true});sctx.drawImage(canvas,0,0,12,12);
     const px=sctx.getImageData(0,0,12,12).data,gray=[];
