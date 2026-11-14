@@ -59,7 +59,6 @@ $('file').onchange=e=>{imageFile=e.target.files[0]||null;if(imageFile){$('previe
 
 // AGPL-3.0のChampions Calcローカル認識エンジンをブラウザ内で実行。
 // 画像認識のための外部API呼び出し・Edge Function呼び出しは行わない。
-$('learnImage')?.remove();
 $('runOcr').onclick=async()=>{
  if(!imageFile)return $('ocrStatus').textContent='先に選出画面のスクショを選択してください';
  const btn=$('runOcr');btn.disabled=true;$('ocrStatus').textContent='端末内で相手6匹を解析中…';$('ocrText').value='';
