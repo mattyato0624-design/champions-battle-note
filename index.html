@@ -21,7 +21,7 @@
 <div class="tabs"><button onclick="tab('entry')">⚔ 対戦を記録</button><button class="alt" onclick="tab('team')">🎀 PT設定</button><button class="alt" onclick="tab('history')">📖 戦績</button></div>
 <section id="entry"><div class="entrygrid">
 <div><div class="card"><h2>📸 相手PT画像</h2><input id="file" type="file" accept="image/*" capture="environment"><div class="row"><button type="button" class="alt" id="runOcr">相手6匹を自動認識</button></div><p id="ocrStatus" class="hint">無料・端末内処理。画像を選んでボタンを押すだけで、相手側の6匹を自動照合します。画像は認識のためにサーバーへ送信しません。</p><textarea id="ocrText" rows="3" placeholder="OCRで読み取った文字がここに表示されます" readonly></textarea><img id="preview" class="hidden"><p id="status">画像は対戦記録としてクラウド保存できます（認識処理は端末内のみ）。</p><p class="hint"><a href="./LICENSE-AGPL-3.0.txt" target="_blank" rel="noopener">AGPL-3.0ライセンス</a> · <a href="./THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">第三者著作権表示</a></p></div>
-<div class="card"><h2>🔎 相手の6匹</h2><div class="grid" id="opps"></div></div></div>
+<div class="card"><h2>🔎 相手の6匹</h2><div class="grid" id="opps"></div><div id="learnPanel" class="notice hidden"></div></div></div>
 <div><div class="card"><h2>💗 自分の選出（3匹）</h2><b id="count">0 / 3</b><div class="team" id="picker"></div><label>メガ進化</label><select id="mega"><option value="">未記録</option><option>メガスターミー</option><option>リザードンY</option><option>その他</option></select><label>自分の初手</label><select id="mylead"></select><label>相手の初手</label><input id="oplead" placeholder="例：ハッサム"></div>
 <div class="card"><h2>🏁 結果・振り返り</h2><select id="result"><option value="">結果未記録</option><option>勝ち</option><option>負け</option></select><select id="tag"><option value="">反省タグなし</option><option>選出ミス</option><option>初手・対面判断</option><option>交代判断</option><option>積み技を許した</option><option>技選択</option><option>相手の型が想定外</option><option>運・急所・命中</option></select><textarea id="memo" rows="3" placeholder="勝因・敗因・気づいたこと"></textarea><button id="saveMatch" style="width:100%">この対戦を保存 ♡</button></div></div></div></section>
 <section id="team" class="hidden"><div class="card"><h2>🎀 PTメンバー設定</h2><p>PTごとに6匹を登録できます。</p><div class="grid" id="teamform"></div><button id="saveTeam" style="width:100%">この6匹で保存</button></div></section>
@@ -34,7 +34,7 @@ const SUPABASE_URL='https://bpzbuvjkrjebfmlbokgb.supabase.co';
 const SUPABASE_KEY='sb_publishable_beyuQtTygVpBgyl0vOuMXQ_gVo-T9FU';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id), DEFAULT_TEAM=['メガスターミー','リザードンY','ピクシー','アーマーガア','イエッサン','セグレイブ'];
-let user=null,teams=[],activeTeam=null,picked=[],imageFile=null,matches=[];
+let user=null,teams=[],activeTeam=null,picked=[],imageFile=null,matches=[],recognitionSamples=[];
 for(let i=0;i<6;i++){let a=document.createElement('div');a.className='slot';a.innerHTML='相手 '+(i+1)+'<input id="opp'+i+'" placeholder="ポケモン名">';$('opps').append(a);let b=document.createElement('div');b.className='slot';b.innerHTML='メンバー '+(i+1)+'<input id="tf'+i+'">';$('teamform').append(b)}
 function tab(t){['entry','team','history'].forEach(x=>$(x).classList.toggle('hidden',x!==t));if(t==='history')render()}
 function team(){return teams.find(x=>x.id===activeTeam)}function members(){return team()?.pokemon||DEFAULT_TEAM}
@@ -59,15 +59,30 @@ $('file').onchange=e=>{imageFile=e.target.files[0]||null;if(imageFile){$('previe
 
 // AGPL-3.0のChampions Calcローカル認識エンジンをブラウザ内で実行。
 // 画像認識のための外部API呼び出し・Edge Function呼び出しは行わない。
+function renderLearningPanel(results){
+ const panel=$('learnPanel');panel.innerHTML='';const uncertain=results.map((p,i)=>({...p,index:i})).filter(p=>!p.name);
+ if(!uncertain.length){panel.classList.add('hidden');return}
+ panel.classList.remove('hidden');
+ const heading=document.createElement('b');heading.textContent='判別できなかった枠の学習';panel.append(heading);
+ const desc=document.createElement('p');desc.textContent='正しい名前を一度登録すると、この端末に保存され、次回から認識候補に使われます。';panel.append(desc);
+ uncertain.forEach(p=>{
+  const wrap=document.createElement('div');wrap.style.margin='8px 0';wrap.style.padding='8px';wrap.style.background='#fff';wrap.style.borderRadius='8px';
+  const label=document.createElement('label');label.textContent='相手 '+(p.index+1)+'匹目 · 候補：'+(p.candidate||'なし')+' · '+Math.round(p.confidence*100)+'%';wrap.append(label);
+  const field=document.createElement('input');field.placeholder='正しいポケモン名';field.value=p.candidate||'';wrap.append(field);
+  const save=document.createElement('button');save.type='button';save.textContent='正解を保存して学習';save.onclick=async()=>{const species=field.value.trim();if(!species)return alert('正しいポケモン名を入力してね');try{const mod=await import('./local-recognizer.js');await mod.saveLearnedSample(p.sample,species);$('opp'+p.index).value=species;save.textContent='学習済み ✓';save.disabled=true;const left=uncertain.filter(x=>!$('opp'+x.index).dataset.learned);$('opp'+p.index).dataset.learned='1';if(uncertain.every(x=>$('opp'+x.index).dataset.learned==='1')){panel.classList.add('hidden')} }catch(e){alert('学習保存エラー：'+e.message)}};wrap.append(save);panel.append(wrap);
+ });
+}
 $('runOcr').onclick=async()=>{
  if(!imageFile)return $('ocrStatus').textContent='先に選出画面のスクショを選択してください';
  const btn=$('runOcr');btn.disabled=true;$('ocrStatus').textContent='端末内で相手6匹を解析中…';$('ocrText').value='';
  try{
   const {recognizeOpponentImage}=await import('./local-recognizer.js');
   const result=await recognizeOpponentImage(imageFile);
+  recognitionSamples=result.pokemon;
   result.pokemon.forEach((p,i)=>{$('opp'+i).value=p.name||''});
-  $('ocrText').value=result.pokemon.map((p,i)=>(i+1)+'. '+(p.name|| (p.candidate?'候補：'+p.candidate+'（要確認）':'判定できず'))+' / 信頼度 '+Math.round(p.confidence*100)+'%').join('\\n');
-  $('ocrStatus').textContent='認識完了：'+result.recognized+'/6匹を自動入力。候補・空欄は画像を見て確認してください。';
+  renderLearningPanel(result.pokemon);
+  $('ocrText').value=result.pokemon.map((p,i)=>(i+1)+'. '+(p.name|| (p.candidate?'候補：'+p.candidate+'（要確認）':'判定できず'))+' / 信頼度 '+Math.round(p.confidence*100)+'%'+(p.learnedMatch?' / 学習データ一致':'')).join('\\n');
+  $('ocrStatus').textContent='認識完了：'+result.recognized+'/6匹を自動入力。判別できない枠は下で正解を登録できます。';
  }catch(e){$('ocrStatus').textContent='認識できませんでした：'+(e?.message||String(e));}
  finally{btn.disabled=false}
 };
